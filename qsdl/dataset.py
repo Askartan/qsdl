@@ -3,17 +3,17 @@ import h5py as hdf
 import json
 
 from pathlib import Path
-from config import CUTOFF, GRID, XMAX
-from labels import LABEL_TO_ID, LABELS
-from states import sample_state
-from wigner import apply_wigner
-from noise import generate_params, apply_channel_noise, apply_wigner_noise
+from qsdl.config import CUTOFF, GRID, XMAX
+from qsdl.labels import LABEL_TO_ID, LABELS
+from qsdl.states import sample_state
+from qsdl.wigner import apply_wigner
+from qsdl.noise import generate_params, apply_channel_noise, apply_wigner_noise
 
 def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int = 67):
     rng = np.random.default_rng(seed)
     wigners, labels, metas = [], [], []
 
-    project_dir = Path.cwd().parent
+    project_dir = Path.cwd()
     data_dir = project_dir / f"{out_path}"
     
     if data_dir.exists() == False:

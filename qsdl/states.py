@@ -3,7 +3,7 @@ from qutip import fock_dm, coherent_dm, thermal_dm
 
 import math
 import numpy as np
-from config import CUTOFF
+from qsdl.config import CUTOFF
 
 # stan |n><n|
 def fock_state(N: int, n: int) -> qt.Qobj:
