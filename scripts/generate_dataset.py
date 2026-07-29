@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
+
 from qsdl.dataset import generate_samples
+
 
 def main():
     p = argparse.ArgumentParser()

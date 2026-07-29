@@ -1,19 +1,19 @@
-import sklearn.metrics as metrics
 from numpy import mean
+from sklearn import metrics
+
 
 def evaluate(model, test_loader, device):
     model.eval()
-    
+
     y_true = []
     y_pred = []
 
     for wig, lab in test_loader:
         wig = wig.to(device)
         lab = lab.long()
-        
+
         preds = model(wig)
         pred = preds.argmax(dim=1)
-
 
         y_true.extend(lab.cpu().tolist())
         y_pred.extend(pred.cpu().tolist())

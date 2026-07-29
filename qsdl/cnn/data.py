@@ -3,19 +3,20 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+
 class WignerDataset(Dataset):
     def __init__(self, h5_path, indices=None):
         with hdf.File(f"{h5_path}", "r") as f:
-            self.wigners = f["wigner"][:]
-            self.labels =  f["labels"][:]
+            self.wigners: np.ndarray = f["wigner"][:]
+            self.labels: np.ndarray = f["labels"][:]
             if indices is not None:
                 self.wigners = self.wigners[indices]
-                self.labels =  self.labels[indices]   
+                self.labels = self.labels[indices]
 
     def __len__(self):
         return len(self.labels)
 
-    def __getitem__(self, i):
+    def __getitem__(self, i: int):
         wigner_t = torch.unsqueeze(torch.from_numpy(self.wigners[i]), 0)
         label_t = torch.tensor(self.labels[i], dtype=torch.long)
         return wigner_t, label_t
@@ -37,12 +38,12 @@ def stratified_split(N, rng, train, test, val):
     ixs = np.arange(0, N)
 
     for i in range(7):
-        class_ixs = ixs[i * N_class : (i+1) * N_class] 
+        class_ixs = ixs[i * N_class : (i+1) * N_class]
         shuffled = rng.permutation(class_ixs)
         groups = np.split(shuffled, np.cumsum([len_train, len_test, len_val])[:-1])
 
-        for j in groups[0]: train_idx.append(j)
-        for j in groups[1]: test_idx.append(j)
-        for j in groups[2]: val_idx.append(j)
+        train_idx.extend(list(groups[0]))
+        test_idx.extend(list(groups[1]))
+        val_idx.extend(list(groups[2]))
 
     return train_idx, test_idx, val_idx

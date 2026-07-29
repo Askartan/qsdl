@@ -1,4 +1,5 @@
-import torch.nn as nn
+from torch import nn
+
 
 class StateClassifierCNN(nn.Module):
     def __init__(self):
@@ -17,6 +18,6 @@ class StateClassifierCNN(nn.Module):
                 nn.Flatten(),
                 nn.Linear(128,7)
             )
-    
+
     def forward(self, x):
         return self.net(x)

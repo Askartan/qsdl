@@ -1,6 +1,7 @@
-import qutip as qt
-import numpy as np
 import math
+
+import numpy as np
+import qutip as qt
 
 
 def snr_to_sigma(img, snr_db):
@@ -28,12 +29,12 @@ def dephase(rho: qt.Qobj, gamma: float) -> qt.Qobj:
 def thermal_mix(rho: qt.Qobj, p: float, nbar: float):
     if not (0.0 <= p <= 1.0):
         raise ValueError(f"p: {p} musi być między 0 a 1")
-    
+
     if nbar < 0:
         raise ValueError(f"nbar: {nbar} nie moze byc ujemny")
 
-    N = rho.shape[0] 
-    
+    N = rho.shape[0]
+
     rho_thermal = qt.thermal_dm(N, nbar)
 
     return (1.0 - p) * rho + p * rho_thermal
@@ -72,7 +73,7 @@ def generate_params(rng):
     # 70% szans na photon loss
     if rng.random() < 0.7:
         params["photonL"] = rng.uniform(0.6, 0.95)
-    
+
     # 30% szans na dephase
     if rng.random() < 0.3:
         params["dephase"] = rng.uniform(0.01, 0.2)
@@ -97,6 +98,6 @@ def apply_channel_noise(rho: qt.Qobj, params: dict) -> qt.Qobj:
 def apply_wigner_noise(W, params, rng):
     if "gauss" not in params:
         return W
-    
+
     sigma = snr_to_sigma(W, params["gauss"])
     return gaussian_noise(W, sigma ,rng)

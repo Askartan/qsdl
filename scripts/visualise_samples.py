@@ -1,11 +1,10 @@
-## TODO
-
 import argparse
 from pathlib import Path
 
 import h5py as hdf
 import matplotlib.pyplot as plt
 import numpy as np
+
 
 def main():
     p = argparse.ArgumentParser()
@@ -31,12 +30,11 @@ def main():
         xmax = float(f.attrs.get("XMAX", 6.0))
         n_classes = len(f.attrs.get("LABEL_NAMES"))
 
-    
+    ## TODO reszta
 
 
     fig, axes = plt.subplots(
-        n_classes, 
+        n_classes,
         n_cols,
         figsize=(2.2 * n_cols)
     )
-

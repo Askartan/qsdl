@@ -1,21 +1,23 @@
-import qutip as qt
-from qutip import fock_dm, coherent_dm, thermal_dm 
-
 import math
+
 import numpy as np
+import qutip as qt
+from qutip import coherent_dm, fock_dm, thermal_dm
+
 from qsdl.config import CUTOFF
+
 
 # stan |n><n|
 def fock_state(N: int, n: int) -> qt.Qobj:
     if not 0 <= n < N:
         raise ValueError(f"n={n} poza bazą N={N}")
-    
-    return fock_dm(N, n) 
+
+    return fock_dm(N, n)
 
 def coherent_state(N: int, alpha: complex) -> qt.Qobj:
     if 0 >= N:
         raise ValueError(f"baza N={N} musi byc wieksza od 0")
-    
+
     return coherent_dm(N, alpha)
 
 # stan |0><0|
@@ -83,13 +85,13 @@ def gkp_state(N: int, delta: float, mu: int = 0, smax: int = 4) -> qt.Qobj:
 
     if norm < 1e-6:
         raise ValueError("GKP state vanished after truncation; increase N")
-   
+
     return qt.ket2dm(ket / norm)
 
 def sample_state(label: str, N: int, rng) -> tuple[qt.Qobj, dict]:
     if label == "fock":
         n = int(rng.integers(1,9))
-        
+
         return fock_state(CUTOFF, n), {"n": n}
 
     if label == "coherent":
@@ -101,7 +103,7 @@ def sample_state(label: str, N: int, rng) -> tuple[qt.Qobj, dict]:
 
     if label == "thermal":
         nbar = float(rng.uniform(0.2, 4.0))
-        
+
         return thermal_state(CUTOFF, nbar), {"nbar": nbar}
 
     if label == "vacuum":
@@ -117,9 +119,9 @@ def sample_state(label: str, N: int, rng) -> tuple[qt.Qobj, dict]:
         return cat_state(CUTOFF, alpha, phi), {"amp": amp, "phase": phase, "alpha_re": alpha.real, "alpha_im": alpha.imag, "phi": phi}
 
     if label == "binomial":
-        S = int(rng.integers(1, 3))      
-        K = int(rng.integers(2, 5))      
-        mu = int(rng.integers(0, 2))     
+        S = int(rng.integers(1, 3))
+        K = int(rng.integers(2, 5))
+        mu = int(rng.integers(0, 2))
         return binomial_state(CUTOFF, S, K, mu), {"S": S, "K": K, "mu": mu}
 
     if label == "gkp":

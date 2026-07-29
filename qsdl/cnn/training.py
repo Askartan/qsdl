@@ -1,8 +1,9 @@
-from math import inf
 from copy import deepcopy
+from math import inf
+
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
+
 
 def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion=None, optimizer=None, debug=True, name="model"):
     if criterion is None:
@@ -60,12 +61,12 @@ def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion
         val_correct = 0
         val_total = 0
 
-        with torch.no_grad():           
+        with torch.no_grad():
             for wig, lab in val_loader:
                 wig = wig.to(device)
                 lab = lab.long()
                 lab = lab.to(device)
-                
+
                 pred = model(wig)
                 loss = criterion(pred, lab)
                 val_loss += loss.item() * wig.size(0)
@@ -80,7 +81,7 @@ def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion
             best_i = epoch
             best_weights = deepcopy(model.state_dict())
 
-    
+
         history["val_loss"].append(val_loss)
         history["val_acc"].append(val_acc)
 
@@ -90,7 +91,7 @@ def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion
                 f"train loss {train_loss:.4f} acc {train_acc:.3f} | "
                 f"val loss {val_loss:.4f} acc {val_acc:.3f}"
             )
-        
+
     model.load_state_dict(best_weights)
     torch.save(model.state_dict(), f"models/{name}.pt")
 
