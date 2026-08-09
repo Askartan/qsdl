@@ -14,6 +14,8 @@ from qsdl.wigner import apply_wigner
 def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int = 67):
     rng = np.random.default_rng(seed)
     wigners, labels, metas = [], [], []
+    wigners_clean = []
+    rhos_clean = []
 
     project_dir = Path.cwd()
     data_dir = project_dir / f"{out_path}"
@@ -27,7 +29,13 @@ def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int = 67
         for _ in range(n_per_class):
             rho, state_data = sample_state(label, CUTOFF, rng)
 
+            rhos_clean.append(np.asarray(rho.full(), dtype=np.complex64))
+
             noise_params = generate_params(rng) if add_noise else {}
+
+            # wigner bez szumu - ważne do gana
+            W_clean = apply_wigner(rho, GRID, XMAX)
+            wigners_clean.append(W_clean)
 
             if add_noise:
                 rho = apply_channel_noise(rho, noise_params)
@@ -55,6 +63,8 @@ def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int = 67
 
     with hdf.File(f"{file_name}", "w") as f:
         f.create_dataset("wigner", data=Wigner_array)
+        f.create_dataset("wigner_clean", data=np.stack(wigners_clean))
+        f.create_dataset("rhos_clean", data=np.stack(rhos_clean))
         f.create_dataset("labels", data=Label_array)
         dt = hdf.string_dtype(encoding="utf-8")
         f.create_dataset("metadata", data=np.array(Meta_strs, dtype=object), dtype=dt)
