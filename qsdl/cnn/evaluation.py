@@ -1,5 +1,6 @@
 from numpy import mean
 from sklearn import metrics
+import torch
 
 
 def evaluate(model, test_loader, device):
@@ -8,17 +9,18 @@ def evaluate(model, test_loader, device):
     y_true = []
     y_pred = []
 
-    for wig, lab in test_loader:
-        wig = wig.to(device)
-        lab = lab.long()
+    with torch.no_grad():
+        for wig, lab in test_loader:
+            wig = wig.to(device)
+            lab = lab.long()
 
-        preds = model(wig)
-        pred = preds.argmax(dim=1)
+            preds = model(wig)
+            pred = preds.argmax(dim=1)
 
-        y_true.extend(lab.cpu().tolist())
-        y_pred.extend(pred.cpu().tolist())
+            y_true.extend(lab.cpu().tolist())
+            y_pred.extend(pred.cpu().tolist())
 
-    accuracy = mean([ y_pred[i] == y_true[i] for i in range(len(y_pred)) ])
-    cm = metrics.confusion_matrix(y_true, y_pred)
+        accuracy = mean([ y_pred[i] == y_true[i] for i in range(len(y_pred)) ])
+        cm = metrics.confusion_matrix(y_true, y_pred)
 
     return accuracy, cm

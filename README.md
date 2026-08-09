@@ -31,7 +31,7 @@ pip install .
 To generate quantum states data, use
 
 ```bash
-python generate_dataset.py --n-per-class 50 --out data --noise --seed 42  
+python -m scripts.generate_dataset --n-per-class 50 --out data --noise --seed 42
 ```
 - `--n-per-class`: How many samples per class (7*n for all) 
 - `--out`: Folder in which the data will be saved
