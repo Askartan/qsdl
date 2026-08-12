@@ -1,26 +1,35 @@
 import torch
 
-# L -> rho
-def rho_from_params(params: list, N=2):
-    Im_idx = len(params) // 2
 
-    L = torch.zeros(N, N, dtype=torch.complex64)
+# macierz dolnotrójkątna -> rho
+def rho_from_params(params, N):
+    if params.ndim != 2:
+        raise ValueError("Error: rho.py -- number of L tensor dimenstions is not 2")
 
-    # dziwne
-    L_idx = torch.tril_indices(N,N)
-    L_row = L_idx[0]
-    L_col = L_idx[1]
+    rhos = []
+    for param_tensor in params:
 
-    complexList = []
-    for i in range(Im_idx):
-        z = torch.complex(params[i], params[i + Im_idx])
-        complexList.append(z)
+        Im_idx = len(param_tensor) // 2
 
-    for i in range(len(L_row)):
-        L[L_row[i], L_col[i]] = complexList[i]
+        L = torch.zeros(N, N, dtype=torch.complex64)
 
-    L_dag = L.mH
-    LL = L @ L_dag
-    rho = LL / torch.trace(LL)
+        # dziwne
+        L_idx = torch.tril_indices(N,N)
+        L_row = L_idx[0]
+        L_col = L_idx[1]
 
-    return rho
+        complexList = []
+        for i in range(Im_idx):
+            z = torch.complex(param_tensor[i], param_tensor[i + Im_idx])
+            complexList.append(z)
+
+        for i in range(len(L_row)):
+            L[L_row[i], L_col[i]] = complexList[i]
+
+        L_dag = L.mH
+        LL = L @ L_dag
+        rho = LL / torch.trace(LL)
+
+        rhos.append(rho)
+
+    return torch.stack(rhos,dim=0)
