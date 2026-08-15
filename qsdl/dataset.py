@@ -11,12 +11,14 @@ from qsdl.states import sample_state
 from qsdl.wigner import apply_wigner
 
 
-def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int = 67):
+def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int):
     rng = np.random.default_rng(seed)
     wigners, labels, metas = [], [], []
     wigners_clean = []
     rhos_clean = []
 
+    print(f"Zaczynam generowanie próbek, {n_per_class} próbek na klasę, łącznie {n_per_class * len(LABELS)}")
+    print(f"Może trochę potrwać...")
     project_dir = Path.cwd()
     data_dir = project_dir / f"{out_path}"
 
