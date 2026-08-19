@@ -23,7 +23,7 @@ class WignerDataset(Dataset):
 
 def stratified_split(N, rng, train, test, val):
     suma = train + test + val
-    if not (abs(suma - 1) < 1e-9 or abs(suma - 100)) < 1e-9:
+    if not (abs(suma - 1) < 1e-9 or abs(suma - 100) < 1e-9):
         raise ValueError(f"Parametry train: {train} test: {test} val: {val} musza sie rownac 1 lub 100%")
     if abs(suma - 100) < 1e-9:
         train, test, val = train / 100, test / 100, val / 100
