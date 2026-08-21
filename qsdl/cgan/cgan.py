@@ -14,9 +14,9 @@ class StateReconstructor(nn.Module):
             nn.Conv2d(64,128,3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.AdaptiveAvgPool2d(1),
+            nn.AdaptiveAvgPool2d(4),
             nn.Flatten(),
-            nn.Linear(128, 4160)
+            nn.Linear(2048, 4160)
         )
 
     def forward(self, x):
