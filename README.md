@@ -1,5 +1,3 @@
-##### potem dodam opis nie chce mi sie pozdro
-
 ## Installation
 
 To install the Quantum State Deep Learning repository use
