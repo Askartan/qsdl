@@ -6,7 +6,7 @@ import numpy as np
 
 from qsdl.config import CUTOFF, GRID, XMAX
 from qsdl.labels import LABEL_TO_ID, LABELS
-from qsdl.noise import apply_channel_noise, apply_wigner_noise, generate_params
+from qsdl.noise import apply_channel_noise, apply_gauss_noise, generate_params
 from qsdl.states import sample_state
 from qsdl.wigner import apply_wigner
 
@@ -18,7 +18,7 @@ def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int):
     rhos_clean = []
 
     print(f"Zaczynam generowanie próbek, {n_per_class} próbek na klasę, łącznie {n_per_class * len(LABELS)}")
-    print(f"Może trochę potrwać...")
+    print("Może trochę potrwać...")
     project_dir = Path.cwd()
     data_dir = project_dir / f"{out_path}"
 
@@ -45,7 +45,7 @@ def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int):
             W = apply_wigner(rho, GRID, XMAX)
 
             if add_noise:
-                W = apply_wigner_noise(W, noise_params, rng)
+                W = apply_gauss_noise(W, noise_params, rng)
 
             wigners.append(W)
             labels.append(LABEL_TO_ID[label])

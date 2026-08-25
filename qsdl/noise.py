@@ -95,7 +95,7 @@ def apply_channel_noise(rho: qt.Qobj, params: dict) -> qt.Qobj:
 
     return rho
 
-def apply_wigner_noise(W, params, rng):
+def apply_gauss_noise(W, params, rng):
     if "gauss" not in params:
         return W
 
