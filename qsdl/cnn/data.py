@@ -21,7 +21,8 @@ class WignerDataset(Dataset):
         label_t = torch.tensor(self.labels[i], dtype=torch.long)
         return wigner_t, label_t
 
-def stratified_split(N, rng, train, test, val):
+def stratified_split(N, rng_idx, train, test, val):
+    rng = np.random.default_rng(rng_idx)
     suma = train + test + val
     if not (abs(suma - 1) < 1e-9 or abs(suma - 100) < 1e-9):
         raise ValueError(f"Parametry train: {train} test: {test} val: {val} musza sie rownac 1 lub 100%")

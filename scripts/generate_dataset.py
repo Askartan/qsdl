@@ -10,10 +10,11 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--noise", action="store_true")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--workers", type=int, default=None)
     args = p.parse_args()
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    generate_samples(args.n_per_class, args.out, args.noise, args.seed)
+    generate_samples(args.n_per_class, args.out, args.noise, args.seed, args.workers)
 
 if __name__ == "__main__":
     main()

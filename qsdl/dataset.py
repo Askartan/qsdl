@@ -1,3 +1,4 @@
+import os
 import json
 from pathlib import Path
 
@@ -9,54 +10,73 @@ from qsdl.labels import LABEL_TO_ID, LABELS
 from qsdl.noise import apply_channel_noise, apply_gauss_noise, generate_params
 from qsdl.states import sample_state
 from qsdl.wigner import apply_wigner
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+def _one_sample(args):
+    i, label, seed_i, add_noise = args
+    rng = np.random.default_rng(seed_i)
+
+    rho, state_data = sample_state(label, CUTOFF, rng)
+    rho_np = np.asarray(rho.full(), dtype=np.complex64)
+
+    noise_params = generate_params(rng) if add_noise else {}
+    W_clean = apply_wigner(rho, GRID, XMAX)
+
+    if add_noise:
+        rho = apply_channel_noise(rho, noise_params)
+
+    W = apply_wigner(rho, GRID, XMAX)
+    if add_noise:
+        W = apply_gauss_noise(W, noise_params, rng)
+
+    return (
+        i,
+        W,
+        W_clean,
+        rho_np,
+        LABEL_TO_ID[label],
+        {**state_data, **noise_params}
+    )
 
 
-def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int):
-    rng = np.random.default_rng(seed)
-    wigners, labels, metas = [], [], []
-    wigners_clean = []
-    rhos_clean = []
+def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int, workers=None):
+    if workers is None:
+        cpu_count = os.cpu_count() or 1
+        workers = max(1, cpu_count - 1)
 
-    print(f"Zaczynam generowanie próbek, {n_per_class} próbek na klasę, łącznie {n_per_class * len(LABELS)}")
-    print("Może trochę potrwać...")
     project_dir = Path.cwd()
     data_dir = project_dir / f"{out_path}"
 
     if data_dir.exists() == False:
         data_dir.mkdir(exist_ok=False, parents=True)
 
+    print(f"Zaczynam generowac dane na {os.cpu_count() or 1} procesach")
+
+    jobs = []
+    k = 0
     for label in LABELS:
-        print(f"Generuję {n_per_class} probek stanu {label}: {LABEL_TO_ID[label] + 1} / 7 ... ", end="", flush=True,)
-
         for _ in range(n_per_class):
-            rho, state_data = sample_state(label, CUTOFF, rng)
+            jobs.append((k, label, seed + k * 10007, add_noise))
+            k += 1
 
-            rhos_clean.append(np.asarray(rho.full(), dtype=np.complex64))
+    results = [None] * len(jobs)
 
-            noise_params = generate_params(rng) if add_noise else {}
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(_one_sample, job) for job in jobs]
+        done = 0
+        for fut in as_completed(futures):
+            i, W, W_clean, rho_np, lab, meta = fut.result()
+            results[i] = (W, W_clean, rho_np, lab, meta)
+            done += 1
+            if done % 50 == 0:
+                print(f"{done}/{len(jobs)}", flush=True)
 
-            # wigner bez szumu - ważne do gana
-            W_clean = apply_wigner(rho, GRID, XMAX)
-            wigners_clean.append(W_clean)
-
-            if add_noise:
-                rho = apply_channel_noise(rho, noise_params)
-
-            W = apply_wigner(rho, GRID, XMAX)
-
-            if add_noise:
-                W = apply_gauss_noise(W, noise_params, rng)
-
-            wigners.append(W)
-            labels.append(LABEL_TO_ID[label])
-            metas.append({**state_data, **noise_params})
-
-        print("OK")
-
-    Wigner_array = np.stack(wigners).astype(np.float32)
-    Label_array = np.array(labels, dtype=np.int8)
-
-    Meta_strs = [json.dumps(m, default=float) for m in metas]
+    wigners = [r[0] for r in results]
+    wigners_clean = [r[1] for r in results]
+    rhos_clean = [r[2] for r in results]
+    labels = [r[3] for r in results]
+    metas = [r[4] for r in results]
+    meta_strs = [json.dumps(m, default=float) for m in metas]
 
     file_name = data_dir / f"train_{"noisy" if add_noise else "clean"}_{n_per_class*7}.h5"
 
@@ -64,12 +84,12 @@ def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int):
         file_name = data_dir / f"train_{"noisy" if add_noise else "clean"}_{n_per_class}_copy.h5"
 
     with hdf.File(f"{file_name}", "w") as f:
-        f.create_dataset("wigner", data=Wigner_array)
+        f.create_dataset("wigner", data=wigners)
         f.create_dataset("wigner_clean", data=np.stack(wigners_clean))
         f.create_dataset("rhos_clean", data=np.stack(rhos_clean))
-        f.create_dataset("labels", data=Label_array)
+        f.create_dataset("labels", data=labels)
         dt = hdf.string_dtype(encoding="utf-8")
-        f.create_dataset("metadata", data=np.array(Meta_strs, dtype=object), dtype=dt)
+        f.create_dataset("metadata", data=np.array(meta_strs, dtype=object), dtype=dt)
 
         f.attrs["SEED"] = seed
         f.attrs["noisy"] = add_noise

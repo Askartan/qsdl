@@ -95,7 +95,7 @@ def sample_state(label: str, N: int, rng) -> tuple[qt.Qobj, dict]:
         return fock_state(CUTOFF, n), {"n": n}
 
     if label == "coherent":
-        amp = float(rng.uniform(0.5 , 4.0))
+        amp = float(rng.uniform(1.5 , 3.0))
         phase = rng.uniform(0, 2*np.pi)
         alpha = amp * np.exp(1j *phase)
 
