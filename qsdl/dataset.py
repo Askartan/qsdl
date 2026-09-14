@@ -13,13 +13,13 @@ from qsdl.wigner import apply_wigner
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def _one_sample(args):
-    i, label, seed_i, add_noise = args
+    i, label, seed_i, add_noise, noise_fn = args
     rng = np.random.default_rng(seed_i)
-
     rho, state_data = sample_state(label, CUTOFF, rng)
     rho_np = np.asarray(rho.full(), dtype=np.complex64)
 
-    noise_params = generate_params(rng) if add_noise else {}
+    gen_fn = noise_fn if noise_fn is not None else generate_params
+    noise_params = gen_fn(rng) if add_noise else {}
     W_clean = apply_wigner(rho, GRID, XMAX)
 
     if add_noise:
@@ -39,7 +39,7 @@ def _one_sample(args):
     )
 
 
-def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int, workers=None):
+def generate_samples(n_per_class, out_path, add_noise, seed, workers=None, noise_fn=None):
     if workers is None:
         cpu_count = os.cpu_count() or 1
         workers = max(1, cpu_count - 1)
@@ -56,7 +56,7 @@ def generate_samples(n_per_class: int, out_path, add_noise: bool, seed: int, wor
     k = 0
     for label in LABELS:
         for _ in range(n_per_class):
-            jobs.append((k, label, seed + k * 10007, add_noise))
+            jobs.append((k, label, seed + k * 10007, add_noise, noise_fn))
             k += 1
 
     results = [None] * len(jobs)

@@ -3,6 +3,18 @@ import math
 import numpy as np
 import qutip as qt
 
+PHOTON_LOSS_LEVELS_PCT = tuple(range(20, 101, 5))  # 20,25,...,100
+
+def fixed_photon_loss_params(loss_frac: float) -> dict:
+    """loss_frac w [0,1] -> parametry z WYŁĄCZNIE photon lossem, bez gaussa/dephase/thermal."""
+    if not 0.0 <= loss_frac <= 1.0:
+        raise ValueError(f"loss_frac={loss_frac} musi być w [0, 1]")
+    return {"photonL": 1.0 - loss_frac}
+
+def random_level_photon_loss_params(rng, levels_pct=PHOTON_LOSS_LEVELS_PCT):
+    """Losuje jeden z dyskretnych poziomów strat i zwraca dla niego parametry."""
+    pct = rng.choice(levels_pct)
+    return fixed_photon_loss_params(pct / 100.0)
 
 def snr_to_sigma(img, snr_db):
     rms = np.sqrt(np.mean(img**2))
@@ -45,10 +57,13 @@ def photon_loss(rho: qt.Qobj, eta: float) -> qt.Qobj:
     Uses the exact Kraus decomposition
     ``E_k = sqrt((1-eta)^k / k!) * eta^{n_hat/2} * a^k``.
     """
-    if not 0 < eta <= 1:
-        raise ValueError("eta must lie in (0, 1]")
+    if not 0 <= eta <= 1:
+        raise ValueError("eta must lie in [0, 1]")
     if eta == 1.0:
         return rho
+    if eta == 0.0:
+        N = rho.shape[0]
+        return qt.fock_dm(N, 0)  # granica pełnej straty = próżnia
     N = rho.shape[0]
     a = qt.destroy(N)
     eta_half_n = qt.Qobj(np.diag(eta ** (np.arange(N) / 2.0)))
