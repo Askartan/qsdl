@@ -17,7 +17,7 @@ class WignerDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, i: int):
-        wigner_t = torch.unsqueeze(torch.from_numpy(self.wigners[i]), 0)
+        wigner_t = torch.unsqueeze(torch.from_numpy(self.wigners[i]).float(), 0)
         label_t = torch.tensor(self.labels[i], dtype=torch.long)
         return wigner_t, label_t
 
