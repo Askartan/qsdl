@@ -3,13 +3,45 @@ import math
 import numpy as np
 import qutip as qt
 
-PHOTON_LOSS_LEVELS_PCT = tuple(range(20, 101, 5))  # 20,25,...,100
+GAUSS_LEVELS_PCT = tuple(range(0, 101, 5))
+# UWAGA: sigma liczona jest wzgledem SZCZYTU |W|, nie calego obrazu (rms calego 128x128
+# obrazu jest zdominowane przez tlo bliskie zeru, wiec skala SNR-dB wzgledem rms nigdy
+# nie osiagala realnie niszczacego poziomu szumu - patrz uzasadnienie w rozmowie).
+GAUSS_SIGMA_FRAC_MAX = 1.5  # przy pct=100 sigma = 150% szczytu |W| -> sygnal calkowicie zatopiony w szumie
+
+def fixed_gauss_params(pct: float) -> dict:
+    if not 0.0 <= pct <= 100.0:
+        raise ValueError(f"pct={pct} musi być w [0,100]")
+    if pct == 0:
+        return {"noise_level_pct": 0}          # prawdziwe zero, bez klucza "gauss"
+    sigma_frac = (pct / 100.0) * GAUSS_SIGMA_FRAC_MAX
+    return {"gauss_peak_frac": sigma_frac, "noise_level_pct": int(round(pct))}
+
+def random_level_gauss_params(rng, levels_pct=GAUSS_LEVELS_PCT):
+    pct = rng.choice(levels_pct)
+    return fixed_gauss_params(float(pct))
+
+
+DEPHASE_LEVELS_PCT = tuple(range(0, 101, 5))
+GAMMA_MAX = 15.0   # empirycznie: przy CUTOFF=64 to już praktycznie pełna dekoherencja (rho ~diagonalna)
+
+def fixed_dephase_params(pct: float) -> dict:
+    if not 0.0 <= pct <= 100.0:
+        raise ValueError(f"pct={pct} musi być w [0,100]")
+    gamma = (pct / 100.0) * GAMMA_MAX
+    return {"dephase": gamma, "noise_level_pct": int(round(pct))}
+
+def random_level_dephase_params(rng, levels_pct=DEPHASE_LEVELS_PCT):
+    pct = rng.choice(levels_pct)
+    return fixed_dephase_params(float(pct))
+
+PHOTON_LOSS_LEVELS_PCT = tuple(range(0, 101, 5))  # 0,5,...,100
 
 def fixed_photon_loss_params(loss_frac: float) -> dict:
     """loss_frac w [0,1] -> parametry z WYŁĄCZNIE photon lossem, bez gaussa/dephase/thermal."""
     if not 0.0 <= loss_frac <= 1.0:
         raise ValueError(f"loss_frac={loss_frac} musi być w [0, 1]")
-    return {"photonL": 1.0 - loss_frac}
+    return {"photonL": 1.0 - loss_frac, "noise_level_pct": round(loss_frac * 100)}
 
 def random_level_photon_loss_params(rng, levels_pct=PHOTON_LOSS_LEVELS_PCT):
     """Losuje jeden z dyskretnych poziomów strat i zwraca dla niego parametry."""
@@ -22,7 +54,7 @@ def snr_to_sigma(img, snr_db):
 
 def gaussian_noise(img, sigma, rng):
     noise = rng.normal(loc=0.0, scale=sigma, size=img.shape)
-    return noise + img
+    return (noise + img).astype(img.dtype)
 
 def dephase(rho: qt.Qobj, gamma: float) -> qt.Qobj:
     if gamma < 0:
@@ -111,8 +143,14 @@ def apply_channel_noise(rho: qt.Qobj, params: dict) -> qt.Qobj:
     return rho
 
 def apply_gauss_noise(W, params, rng):
-    if "gauss" not in params:
-        return W
+    # kontrolowany sweep (fixed_gauss_params) -> sigma jako ulamek szczytu |W|
+    if "gauss_peak_frac" in params:
+        sigma = params["gauss_peak_frac"] * np.abs(W).max()
+        return gaussian_noise(W, sigma, rng)
 
-    sigma = snr_to_sigma(W, params["gauss"])
-    return gaussian_noise(W, sigma ,rng)
+    # domyslny losowy pipeline (generate_params) -> stara skala SNR w dB, bez zmian
+    if "gauss" in params:
+        sigma = snr_to_sigma(W, params["gauss"])
+        return gaussian_noise(W, sigma, rng)
+
+    return W
