@@ -1,132 +1,210 @@
 import math
 
 import numpy as np
-import qutip as qt
-from qutip import coherent_dm, fock_dm, thermal_dm
+from qutip import Qobj, coherent, coherent_dm, fock, fock_dm, thermal_dm
+from scipy.special import binom, gammaln
 
-from qsdl.config import CUTOFF
+_GKP_PEAKS = {}
 
 
-# stan |n><n|
-def fock_state(N: int, n: int) -> qt.Qobj:
-    if not 0 <= n < N:
-        raise ValueError(f"n={n} poza bazą N={N}")
+def _gkp_peak_matrix(hilbert_size, mu):
+    key = (int(hilbert_size), int(mu))
+    cached = _GKP_PEAKS.get(key)
+    if cached is not None:
+        return cached
 
-    return fock_dm(N, n)
+    c = np.sqrt(np.pi / 2.0)
+    n1 = np.arange(-20, 21)
+    n2 = np.arange(-20, 21)
+    N1, N2 = np.meshgrid(n1, n2, indexing="ij")
+    a = c * (2 * N1 + mu + 1j * N2)
+    a = a.reshape(-1)
+    n1f = N1.reshape(-1)
+    n2f = N2.reshape(-1)
+    keep = np.abs(a) ** 2 < hilbert_size * 4
+    a = a[keep]
+    n1f = n1f[keep]
+    n2f = n2f[keep]
 
-def coherent_state(N: int, alpha: complex) -> qt.Qobj:
-    if 0 >= N:
-        raise ValueError(f"baza N={N} musi byc wieksza od 0")
+    n = np.arange(hilbert_size)
+    abs_a = np.abs(a)
+    with np.errstate(divide="ignore"):
+        log_a = np.log(np.where(abs_a > 0, abs_a, 1.0))
+    log_mag = (
+        -abs_a[:, None] ** 2 / 2.0
+        + n[None, :] * log_a[:, None]
+        - 0.5 * gammaln(n + 1)[None, :]
+    )
+    phase = np.exp(1j * n[None, :] * np.angle(a)[:, None])
+    A = np.exp(log_mag) * phase
+    zero = abs_a == 0
+    A[zero, 1:] = 0.0
+    A[zero, 0] = 1.0
 
-    return coherent_dm(N, alpha)
+    out = (a, n1f, n2f, np.asarray(A, dtype=np.complex128), c)
+    _GKP_PEAKS[key] = out
+    return out
 
-# stan |0><0|
-def vacuum_state(N: int) -> qt.Qobj:
-    return fock_state(N, 0)
 
-def thermal_state(N: int, nbar: float) -> qt.Qobj:
+def fock_state(hilbert_size: int, rng, n=None):
+    if n is None:
+        n = int(rng.integers(1, 17))
+
+    if not 0 <= n < hilbert_size:
+        raise ValueError(f"n={n} poza bazą N={hilbert_size}")
+
+    return fock_dm(hilbert_size, n), {"n": n}
+
+
+def coherent_state(hilbert_size: int, rng, alpha=None):
+    if alpha is None:
+        alpha = random_alpha(rng, radius=3, inner_radius=1e-6)
+
+    return coherent_dm(hilbert_size, alpha), {"alpha": alpha}
+
+
+def vacuum_state(hilbert_size: int, rng):
+    return fock_state(hilbert_size, rng, n=0)
+
+
+def thermal_state(hilbert_size: int, rng, nbar=None):
+    if nbar is None:
+        nbar = float(rng.uniform(0, 16.0))
+
     if nbar < 0:
         raise ValueError("nbar >= 0")
 
-    return thermal_dm(N, nbar)
+    return thermal_dm(hilbert_size, nbar), {"nbar": nbar}
 
 
-def cat_state(N: int, alpha: complex, phi: float) -> qt.Qobj:
-    ket = qt.coherent(N, alpha) + np.exp(1j * phi) * qt.coherent(N, -alpha)
-    return qt.ket2dm(ket.unit())
-
-
-def binomial_state(N: int, S: int, K: int, mu: int = 0) -> qt.Qobj:
-    """Binomial-code word (Michael et al., PRX 6, 031006 (2016)).
-
-    ``|W_mu> ~ sum_{p = mu mod 2} sqrt(C(K+1, p)) |p (S+1)>`` for
-    ``p = 0 .. K+1``.  ``S`` sets the Fock-space spacing (protects against
-    up to ``S`` photon losses), ``K`` the code order, ``mu`` in {0, 1}
-    selects the logical word.
+def cat_state(hilbert_size: int, rng, alpha=None, S=None, mu=None):
     """
-    if mu not in (0, 1):
-        raise ValueError("mu must be 0 or 1")
-    max_n = (K + 1) * (S + 1)
-    if max_n >= N:
-        raise ValueError(
-            f"binomial code needs {max_n + 1} Fock levels, cutoff is {N}"
-        )
-    ket = qt.Qobj(np.zeros((N, 1)))
-    for p in range(mu, K + 2, 2):
-        ket += math.sqrt(math.comb(K + 1, p)) * qt.basis(N, p * (S + 1))
-    return qt.ket2dm(ket.unit())
+    Generates a cat state. For a detailed discussion on the definition
+    see `Albert, Victor V. et al. “Performance and Structure of Single-Mode Bosonic Codes.” Physical Review A 97.3 (2018) <https://arxiv.org/abs/1708.05010>`_
+    and `Ahmed, Shahnawaz et al., “Classification and reconstruction of quantum states with neural networks.” Journal <https://arxiv.org/abs/1708.05010>`_
 
-def gkp_state(N: int, delta: float, mu: int = 0, smax: int = 4) -> qt.Qobj:
-    """Finite-energy square-lattice GKP state.
+    Args:
+    -----
+        N (int): Hilbert size dimension.
+        alpha (complex64): Complex number determining the amplitude.
+        S (int): An integer >= 0 determining the number of coherent states used
+                 to generate the cat superposition. S = {0, 1, 2, ...}.
+                 corresponds to {2, 4, 6, ...} coherent state superpositions.
+        mu (int): An integer 0/1 which generates the logical 0/1 encoding of
+                  a computational state for the cat state.
 
-    Built as a comb of position-squeezed states displaced along ``x`` by
-    ``(2s + mu) * sqrt(pi/2)`` for ``s = -smax .. smax``, followed by the
-    Gaussian envelope operator ``exp(-delta^2 * n_hat)``.  ``delta``
-    controls both peak width and envelope (typical physical values
-    0.2-0.5); ``mu`` in {0, 1} selects the logical word.
+
+    Returns:
+    -------
+        cat (:class:`qutip.Qobj`): Cat state density matrix
     """
-    if not 0 < delta < 1:
-        raise ValueError("delta must lie in (0, 1)")
+    if alpha is None:
+        alpha = random_alpha(rng, radius=3, inner_radius=1.0)
 
-    if mu not in (0, 1):
-        raise ValueError("mu must be 0 or 1")
+    if S is None:
+        S = int(rng.integers(0, 3))
 
-    r = -math.log(delta)  # squeezing so that peak width ~ delta
-    peak = qt.squeeze(N, r) * qt.basis(N, 0)
-    ket = qt.Qobj(np.zeros((N, 1)))
+    if mu is None:
+        mu = int(rng.integers(0, 2))
 
-    for s in range(-smax, smax + 1):
-        alpha = math.sqrt(math.pi / 2.0) * (2 * s + mu)
-        ket += qt.displace(N, alpha) * peak
+    kend = 2 * S + 1
+    cstates = 0 * coherent(hilbert_size, 0)
 
-    envelope = qt.Qobj(np.diag(np.exp(-(delta**2) * np.arange(N))))
-    ket = envelope * ket
-    norm = ket.norm()
+    for k in range(int((kend + 1) / 2)):
+        sign = 1
 
-    if norm < 1e-6:
-        raise ValueError("GKP state vanished after truncation; increase N")
+        if k >= S:
+            sign = (-1) ** int(mu > 0.5)
 
-    return qt.ket2dm(ket / norm)
+        prefactor = np.exp(1j * (np.pi / (S + 1)) * k)
 
-def sample_state(label: str, N: int, rng) -> tuple[qt.Qobj, dict]:
+        cstates += sign * coherent(hilbert_size, prefactor * alpha * (-((1j) ** mu)))
+        cstates += sign * coherent(hilbert_size, -prefactor * alpha * (-((1j) ** mu)))
+
+    rho = cstates * cstates.dag()
+    return rho.unit(), {"alpha": alpha, "S": S, "mu": mu}
+
+
+def binomial_state(hilbert_size, rng, S=None, N=None, mu=None):
+    """
+    Binomial code
+    """
+    if S is None:
+        S = int(rng.integers(1, 11))
+
+    if N is None:
+        Nmax = (hilbert_size-1) // (S + 1) - 1
+        if Nmax > 2:
+            N = int(rng.integers(2, Nmax + 1))
+        else:
+            N = Nmax
+
+    if mu is None:
+        mu = int(rng.integers(0, 2))
+
+    c = 1 / math.sqrt(2 ** (N + 1))
+
+    psi = 0 * fock(hilbert_size, 0)
+
+    for m in range(N + 2):
+        psi += c * ((-1) ** (mu * m)) * np.sqrt(binom(N + 1, m)) * fock(hilbert_size, (S + 1) * m)
+
+    rho = psi * psi.dag()
+    return rho.unit(), {"S": S, "N": N, "mu": mu}
+
+
+def gkp_state(hilbert_size, rng, delta=None, mu=None):
+    """Generates a GKP state
+    """
+    if mu is None:
+        mu = int(rng.integers(0, 2))
+
+    if delta is None:
+        delta = float(rng.uniform(0.2, 0.50))
+
+    a, _, _, A, _ = _gkp_peak_matrix(hilbert_size, mu)
+    w = np.exp(-delta**2 * np.abs(a) ** 2) * np.exp(-1j * np.real(a) * np.imag(a))
+    psi = w @ A
+    ket = Qobj(psi.reshape(-1, 1), dims=[[hilbert_size], [1]])
+    rho = ket * ket.dag()
+    return rho.unit(), {"delta": delta, "mu": mu}
+
+
+def sample_state(label: str, hilbert_size, rng, **kwargs):
+    rng = np.random.default_rng(rng)
+
     if label == "fock":
-        n = int(rng.integers(1,9))
-
-        return fock_state(CUTOFF, n), {"n": n}
+        return fock_state(hilbert_size, rng, **kwargs)
 
     if label == "coherent":
-        amp = float(rng.uniform(1.5 , 3.0))
-        phase = rng.uniform(0, 2*np.pi)
-        alpha = amp * np.exp(1j *phase)
-
-        return coherent_state(CUTOFF, alpha), {"amp": amp, "phase": phase, "alpha_re": alpha.real, "alpha_im": alpha.imag}
+        return coherent_state(hilbert_size, rng, **kwargs)
 
     if label == "thermal":
-        nbar = float(rng.uniform(0.2, 4.0))
-
-        return thermal_state(CUTOFF, nbar), {"nbar": nbar}
+        return thermal_state(hilbert_size, rng, **kwargs)
 
     if label == "vacuum":
-        return vacuum_state(CUTOFF), {"n": 0}
+        return vacuum_state(hilbert_size, rng)
 
     if label == "cat":
-        amp = float(rng.uniform(1.0 , 3.0))
-        phase = rng.uniform(0, 2*np.pi)
-        alpha = amp * np.exp(1j *phase)
-
-        phi = float(rng.choice([0.0, np.pi]))
-
-        return cat_state(CUTOFF, alpha, phi), {"amp": amp, "phase": phase, "alpha_re": alpha.real, "alpha_im": alpha.imag, "phi": phi}
+        return cat_state(hilbert_size, rng, **kwargs)
 
     if label == "binomial":
-        S = int(rng.integers(1, 3))
-        K = int(rng.integers(2, 5))
-        mu = int(rng.integers(0, 2))
-        return binomial_state(CUTOFF, S, K, mu), {"S": S, "K": K, "mu": mu}
+        return binomial_state(hilbert_size, rng, **kwargs)
 
     if label == "gkp":
-        delta = float(rng.uniform(0.25, 0.45))
-        mu = int(rng.integers(0, 2))
-        return gkp_state(CUTOFF, delta, mu), {"delta": delta, "mu": mu, "smax": 4}
+        return gkp_state(hilbert_size, rng, **kwargs)
 
     raise ValueError(f"Nieznana klasa: {label!r}")
+
+
+def random_alpha(rng, radius, inner_radius=0):
+    """
+    Generates a random complex values within a circle
+
+    Args:
+        radius (float): Radius for the values
+        inner_radius (float): Inner radius which defaults to 0.
+    """
+    amp = rng.uniform(inner_radius, radius)
+    phi = rng.uniform(-np.pi, np.pi)
+    return amp * np.exp(1j * phi)

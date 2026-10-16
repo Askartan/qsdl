@@ -83,6 +83,25 @@ def thermal_mix(rho: qt.Qobj, p: float, nbar: float):
 
     return (1.0 - p) * rho + p * rho_thermal
 
+
+def mix_random_dm(rho: qt.Qobj, sigma: float, rng, density: float = 0.8) -> qt.Qobj:
+    """Ahmed et al. Eq. (38): (1-σ)ρ + σ ρ_random, σ∈[0,0.5], density=0.8."""
+    if not 0.0 <= sigma <= 1.0:
+        raise ValueError(f"sigma={sigma} musi być w [0, 1]")
+    if sigma == 0.0:
+        return rho
+    N = rho.shape[0]
+    rho_rand = qt.rand_dm(N, density=density, distribution="herm", seed=rng)
+    mixed = (1.0 - sigma) * rho + sigma * rho_rand
+    return mixed / mixed.tr()
+
+
+def generate_mix_params(rng, sigma_max: float = 0.5, density: float = 0.8) -> dict:
+    return {
+        "mix_sigma": float(rng.uniform(0.0, sigma_max)),
+        "mix_density": float(density),
+    }
+
 def photon_loss(rho: qt.Qobj, eta: float) -> qt.Qobj:
     """Pure-loss channel with transmissivity ``eta`` (1 = lossless).
 
@@ -112,22 +131,15 @@ def photon_loss(rho: qt.Qobj, eta: float) -> qt.Qobj:
 def generate_params(rng):
     params = {}
 
-    # 30% szum termiczny
-    if rng.random() < 0.3:
-        params["thermal_p"] = rng.uniform(0.05, 0.3)
-        params["thermal_nbar"] = rng.uniform(0.1, 1.0)
+    if rng.random() < 1:
+        params["photonL"] = rng.uniform(0, 1)
 
-    # 70% szans na photon loss
-    if rng.random() < 0.7:
-        params["photonL"] = rng.uniform(0.6, 0.95)
+    if rng.random() < 1:
+        params["dephase"] = rng.uniform(0, 0.2)
 
-    # 30% szans na dephase
-    if rng.random() < 0.3:
-        params["dephase"] = rng.uniform(0.01, 0.2)
-
-    # szum detektora - gaussa 100% szans
-    if rng.random() < 1.0:
-        params["gauss"] = rng.uniform(10,30)
+    # szum detektora - gaussa 100% szans DO POMINIĘCIA NA RAZIE
+    # if rng.random() < 1.0:
+    #     params["gauss"] = rng.uniform(10,30)
 
     return params
 
