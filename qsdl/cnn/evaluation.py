@@ -21,6 +21,6 @@ def evaluate(model, test_loader, device):
             y_pred.extend(pred.cpu().tolist())
 
         accuracy = mean([ y_pred[i] == y_true[i] for i in range(len(y_pred)) ])
-        cm = metrics.confusion_matrix(y_true, y_pred)
+        cm = metrics.confusion_matrix(y_true, y_pred, labels=list(range(7)))
 
     return accuracy, cm

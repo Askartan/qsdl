@@ -1,3 +1,3 @@
 CUTOFF = 64
-GRID = 128
+GRID = 8
 XMAX = 5.0

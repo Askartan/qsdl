@@ -1,11 +1,12 @@
 from copy import deepcopy
 from math import inf
+from pathlib import Path
 
 import torch
 from torch import nn, optim
 
 
-def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion=None, optimizer=None, debug=True, name="model"):
+def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion=None, optimizer=None, debug=True, name="model", out_dir="models"):
     if criterion is None:
         criterion = nn.CrossEntropyLoss()
     if optimizer is None:
@@ -93,6 +94,9 @@ def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion
             )
 
     model.load_state_dict(best_weights)
-    torch.save(model.state_dict(), f"models/{name}.pt")
+    dest = Path(out_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    ckpt = dest / f"{name}.pt"
+    torch.save(model.state_dict(), ckpt)
 
-    return (history, {"best_val_loss": best_val_loss, "epoch_i": best_i})
+    return (history, {"best_val_loss": best_val_loss, "epoch_i": best_i, "checkpoint": str(ckpt)})

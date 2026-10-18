@@ -83,25 +83,6 @@ def thermal_mix(rho: qt.Qobj, p: float, nbar: float):
 
     return (1.0 - p) * rho + p * rho_thermal
 
-
-def mix_random_dm(rho: qt.Qobj, sigma: float, rng, density: float = 0.8) -> qt.Qobj:
-    """Ahmed et al. Eq. (38): (1-σ)ρ + σ ρ_random, σ∈[0,0.5], density=0.8."""
-    if not 0.0 <= sigma <= 1.0:
-        raise ValueError(f"sigma={sigma} musi być w [0, 1]")
-    if sigma == 0.0:
-        return rho
-    N = rho.shape[0]
-    rho_rand = qt.rand_dm(N, density=density, distribution="herm", seed=rng)
-    mixed = (1.0 - sigma) * rho + sigma * rho_rand
-    return mixed / mixed.tr()
-
-
-def generate_mix_params(rng, sigma_max: float = 0.5, density: float = 0.8) -> dict:
-    return {
-        "mix_sigma": float(rng.uniform(0.0, sigma_max)),
-        "mix_density": float(density),
-    }
-
 def photon_loss(rho: qt.Qobj, eta: float) -> qt.Qobj:
     """Pure-loss channel with transmissivity ``eta`` (1 = lossless).
 
@@ -149,8 +130,8 @@ def apply_channel_noise(rho: qt.Qobj, params: dict) -> qt.Qobj:
         rho = photon_loss(rho, params["photonL"])
     if "dephase" in params:
         rho = dephase(rho, params["dephase"])
-    if "thermal_p" in params:
-        rho = thermal_mix(rho, params["thermal_p"], params["thermal_nbar"])
+    # if "thermal_p" in params:
+    #     rho = thermal_mix(rho, params["thermal_p"], params["thermal_nbar"])
 
     return rho
 
