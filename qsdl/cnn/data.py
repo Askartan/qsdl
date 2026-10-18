@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import InterpolationMode, RandomAffine, RandomHorizontalFlip, RandomVerticalFlip
+from torchvision.transforms import v2 as T2
 
 
 class WignerDataset(Dataset):
@@ -24,15 +25,32 @@ class WignerDataset(Dataset):
 
 
 class HusimiDataset(Dataset):
-    def __init__(self, h5_path, indices=None, augment=False, affine=True, gauss_sigma_max=0.05):
-        with hdf.File(f"{h5_path}", "r") as f:
-            self.images = np.asarray(f["husimi"][:], dtype=np.float32)
-            self.labels = np.asarray(f["labels"][:])
-            self.grid = int(f.attrs.get("GRID_SIZE", self.images.shape[-1]))
-            if indices is not None:
-                idx = np.asarray(indices)
-                self.images = self.images[idx]
-                self.labels = self.labels[idx]
+    def __init__(
+        self,
+        h5_path=None,
+        indices=None,
+        augment=False,
+        affine=True,
+        gauss_sigma_max=0.05,
+        images=None,
+        labels=None,
+        grid=None,
+    ):
+        if images is None:
+            with hdf.File(f"{h5_path}", "r") as f:
+                images = np.asarray(f["husimi"][:], dtype=np.float32)
+                labels = np.asarray(f["labels"][:])
+                grid = int(f.attrs.get("GRID_SIZE", images.shape[-1]))
+            peaks = images.max(axis=(-2, -1), keepdims=True)
+            images /= np.maximum(peaks, 1e-12)
+        if not torch.is_tensor(images):
+            images = torch.from_numpy(np.ascontiguousarray(images))
+        if not torch.is_tensor(labels):
+            labels = torch.as_tensor(labels, dtype=torch.long)
+        self.images = images
+        self.labels = labels
+        self.grid = int(grid if grid is not None else images.shape[-1])
+        self.indices = np.arange(len(labels)) if indices is None else np.asarray(indices)
 
         self.augment = bool(augment)
         self.affine = bool(affine) and self.grid >= 32
@@ -53,14 +71,11 @@ class HusimiDataset(Dataset):
             ]
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.indices)
 
     def __getitem__(self, i: int):
-        x = self.images[i]
-        peak = float(np.max(x))
-        if peak > 0.0:
-            x = x / peak
-        x = torch.from_numpy(np.ascontiguousarray(x)).unsqueeze(0)
+        j = int(self.indices[i])
+        x = self.images[j].unsqueeze(0)
         if self.augment:
             if self._affine is not None:
                 for t in self._affine:
@@ -68,8 +83,36 @@ class HusimiDataset(Dataset):
             if self.gauss_sigma_max > 0.0:
                 sigma = float(torch.empty(1).uniform_(0.0, self.gauss_sigma_max))
                 x = x + sigma * torch.randn_like(x)
-        label = torch.tensor(self.labels[i], dtype=torch.long)
-        return x, label
+        return x, self.labels[j]
+
+
+class GpuHusimiAugment:
+    """Affine + Gauss on a CUDA batch (N,1,H,W)."""
+
+    def __init__(self, affine=True, gauss_sigma_max=0.05):
+        self.gauss_sigma_max = float(gauss_sigma_max)
+        self._t = None
+        if affine:
+            self._t = T2.Compose(
+                [
+                    T2.RandomAffine(
+                        degrees=180,
+                        translate=(0.2, 0.2),
+                        scale=(0.8, 1.2),
+                        shear=5,
+                    ),
+                    T2.RandomHorizontalFlip(0.5),
+                    T2.RandomVerticalFlip(0.5),
+                ]
+            )
+
+    def __call__(self, x):
+        if self._t is not None:
+            x = self._t(x)
+        if self.gauss_sigma_max > 0.0:
+            sigma = torch.empty((), device=x.device).uniform_(0.0, self.gauss_sigma_max)
+            x = x + sigma * torch.randn_like(x)
+        return x
 
 def stratified_split(N, rng_idx, train, test, val):
     rng = np.random.default_rng(rng_idx)

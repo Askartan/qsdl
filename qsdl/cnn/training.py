@@ -6,13 +6,15 @@ import torch
 from torch import nn, optim
 
 
-def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion=None, optimizer=None, debug=True, name="model", out_dir="models"):
+def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion=None, optimizer=None, debug=True, name="model", out_dir="models", batch_transform=None):
     if criterion is None:
         criterion = nn.CrossEntropyLoss()
     if optimizer is None:
         optimizer = optim.AdamW(model.parameters(), lr=3e-4)
 
     model = model.to(device)
+    if debug:
+        print(f"model device: {next(model.parameters()).device}")
 
     history = {
         "train_loss": [],
@@ -24,6 +26,7 @@ def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion
     best_val_loss = inf
     best_i = 0
     best_weights = None
+    logged_batch = False
     for epoch in range(1, n_epochs + 1):
 
         # ---- TRAIN ----
@@ -35,9 +38,15 @@ def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion
 
         for wig, lab in train_loader:
 
-            wig = wig.to(device)
-            lab = lab.long()
-            lab = lab.to(device)
+            wig = wig.to(device, non_blocking=True)
+            lab = lab.long().to(device, non_blocking=True)
+            if not logged_batch and debug:
+                print(f"batch device: {wig.device}  shape: {tuple(wig.shape)}")
+                if wig.device.type == "cuda":
+                    print(f"gpu: {torch.cuda.get_device_name(0)}")
+                logged_batch = True
+            if batch_transform is not None:
+                wig = batch_transform(wig)
 
             optimizer.zero_grad()
             pred = model(wig)
@@ -64,9 +73,8 @@ def CNN_training(model, train_loader, val_loader, device, n_epochs=40, criterion
 
         with torch.no_grad():
             for wig, lab in val_loader:
-                wig = wig.to(device)
-                lab = lab.long()
-                lab = lab.to(device)
+                wig = wig.to(device, non_blocking=True)
+                lab = lab.long().to(device, non_blocking=True)
 
                 pred = model(wig)
                 loss = criterion(pred, lab)

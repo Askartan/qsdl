@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from qsdl.cnn.classifier import StateClassifierCNN
-from qsdl.cnn.data import HusimiDataset, stratified_split
+from qsdl.cnn.data import GpuHusimiAugment, HusimiDataset, stratified_split
 from qsdl.cnn.evaluation import evaluate
 from qsdl.cnn.training import CNN_training
 from qsdl.labels import LABELS
@@ -39,7 +39,7 @@ def train_one_grid(grid, args, device):
     shared = HusimiDataset(h5, augment=False)
     train_ds = HusimiDataset(
         images=shared.images, labels=shared.labels, grid=shared.grid,
-        indices=train_idx, augment=True, affine=use_affine,
+        indices=train_idx, augment=False,
     )
     val_ds = HusimiDataset(
         images=shared.images, labels=shared.labels, grid=shared.grid,
@@ -53,7 +53,7 @@ def train_one_grid(grid, args, device):
     loader_kw = dict(
         batch_size=args.batch_size,
         num_workers=args.workers,
-        pin_memory=device.type == "cuda",
+        pin_memory=False,
     )
     train_loader = DataLoader(train_ds, shuffle=True, **loader_kw)
     val_loader = DataLoader(val_ds, shuffle=False, **loader_kw)
@@ -69,6 +69,7 @@ def train_one_grid(grid, args, device):
         n_epochs=args.epochs,
         name=name,
         out_dir=args.out_dir,
+        batch_transform=GpuHusimiAugment(affine=use_affine),
     )
     acc, cm = evaluate(model, test_loader, device)
     result = {
@@ -108,6 +109,8 @@ def main():
     args.out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device={device}  grids={args.grids}")
+    if device.type == "cuda":
+        print(f"gpu={torch.cuda.get_device_name(0)}")
 
     summary = []
     for grid in args.grids:
