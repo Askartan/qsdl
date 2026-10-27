@@ -26,7 +26,7 @@ pip install .
 
 ### Data Generation
 
-To generate quantum states data, use
+To generate quantum states data (w for wigner, h for husimi), use
 
 ```bash
 python -m scripts.generate_dataset_w --n-per-class 50 --out data --noise --seed 42
@@ -36,15 +36,6 @@ python -m scripts.generate_dataset_w --n-per-class 50 --out data --noise --seed 
 - `--noise`: Leave if you want random noise applied to samples
 - `--seed`: Randomness seed
 
-
-To visualize generated state data, use
-
-```bash
-TODO - nie dziala na razie 
-```
-
 ### Training
 
 To train the model on generated data use the jupyter notebook in `qsdl/cnn/cnn.ipynb`
-
-I'll add the module script later

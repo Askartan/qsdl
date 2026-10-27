@@ -84,19 +84,8 @@ def load_classifier(path, device):
     """Wybiera architekturę po kluczach w checkpoincie: 'net.*' = StateClassifierCNN,
     'features.*'/'head.*' = StateClassifierCNNv2 (importowana z qsdl.cnn.classifier)."""
     state = torch.load(path, map_location=device, weights_only=True)
-    if any(k.startswith(("features.", "head.")) for k in state):
-        try:
-            from qsdl.cnn.classifier import StateClassifierCNNv2
-        except ImportError as e:
-            raise SystemExit(
-                "Checkpoint wygląda na StateClassifierCNNv2, ale nie ma jej w qsdl/cnn/classifier.py "
-                "- skopiuj ją tam z forka/brancha Pjotra."
-            ) from e
-        model = StateClassifierCNNv2()
-        print("Klasyfikator: StateClassifierCNNv2")
-    else:
-        model = StateClassifierCNN()
-        print("Klasyfikator: StateClassifierCNN")
+    model = StateClassifierCNN()
+    print("Klasyfikator: StateClassifierCNN")
     model.load_state_dict(state)
     return model.to(device)
 

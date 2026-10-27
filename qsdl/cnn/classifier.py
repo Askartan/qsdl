@@ -1,33 +1,7 @@
 from torch import nn
 
-
 class StateClassifierCNN(nn.Module):
-    """Oryginalna, prosta architektura z repo (3 bloki konwolucyjne, ~kilkadziesiat tys. parametrow).
-    Pasuje do checkpointow trenowanych domyslnym cnn.ipynb (np. clean.pt / noisy.pt)."""
-
-    def __init__(self):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(1,32,3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32,64,3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(64, 128,3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-            nn.Linear(128,7)
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-
-class StateClassifierCNNv2(nn.Module):
-    """Architektura Pjotra (checkpoint v2_train_noisy_19999.pt) - 4 bloki Conv-BN-ReLU x2 + MaxPool,
+    """4 bloki Conv-BN-ReLU x2 + MaxPool,
     head z AdaptiveAvgPool2d(4) i dwiema warstwami liniowymi (~2.22M parametrow).
     Zweryfikowane 1:1 wzgledem checkpointu: load_state_dict(strict=True) -> "All keys matched successfully"."""
 
